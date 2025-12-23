@@ -61,6 +61,42 @@ const RESPAWN_DELAY = 90; // frames (~1.5 sec at 60fps)
 // Shooting cooldown
 let lastShotTime = 0;
 const SHOT_COOLDOWN = 400; // milliseconds
+function updateHUD() {
+  document.getElementById("score").innerText = `Score: ${score} | Lives: ${lives}`;
+}
+
+
+function loseLife() {
+  lives--;
+  updateHUD();
+
+  if (lives <= 0) {
+    gameOver = true;
+    return;
+  }
+
+  // Pause and reset the screen, but keep the same number of enemies
+  paused = true;
+  respawnTimer = RESPAWN_DELAY;
+
+  // Reset player + clear bullets
+  player.x = canvas.width / 2 - player.width / 2;
+  lasers = [];
+  enemyLasers = [];
+
+  // Reposition existing enemies off-screen so it feels like a reset
+  enemies.forEach((e, idx) => {
+    const dir = e.vx > 0 ? 1 : -1;
+    e.x = dir > 0
+      ? (-EXT - e.width - idx * 12)
+      : (canvas.width + EXT + e.width + idx * 12);
+    e.y = 50 + Math.random() * 200;
+  });
+}
+
+
+
+  
 
 // --------------------
 // Player
@@ -181,21 +217,100 @@ function enemyShoot(enemy) {
 function update() {
   if (gameOver) return;
 
+  // PAUSE after losing a life
+  if (paused) {
+    respawnTimer--;
+    if (respawnTimer <= 0) paused = false;
+    return;
+  }
+
   // Player movement
   if (keys["ArrowLeft"] && player.x > 0) player.x -= player.speed;
   if (keys["ArrowRight"] && player.x < canvas.width - player.width)
     player.x += player.speed;
 
   // Player lasers
-  lasers.forEach(l => l.y -= l.speed);
+  lasers.forEach(l => (l.y -= l.speed));
   lasers = lasers.filter(l => l.y + l.height > 0);
 
-  // Spawn enemies
+  // Spawn enemy trains
   enemyTimer++;
-  if (enemyTimer > 90) { // slower spawns since trains contain multiple enemies
-  spawnEnemyTrain();
-  enemyTimer = 0;
+  if (enemyTimer > 90) {
+    spawnEnemyTrain();
+    enemyTimer = 0;
+  }
+
+
+    // Enemy movement + shooting
+  const leaders = getTrainLeaders();
+
+  enemies.forEach(e => {
+    e.x += e.vx;
+    e.y += e.vy;
+
+    // Vertical bounce in extended area
+    if (e.y < -EXT) {
+      e.y = -EXT;
+      e.vy *= -1;
+    }
+    if (e.y + e.height > canvas.height + EXT) {
+      e.y = canvas.height + EXT - e.height;
+      e.vy *= -1;
+    }
+
+    // Horizontal wrap
+    if (e.vx > 0 && e.x > canvas.width + EXT) {
+      e.x = -EXT - e.width;
+    }
+    if (e.vx < 0 && e.x + e.width < -EXT) {
+      e.x = canvas.width + EXT;
+    }
+
+    // ONLY leader shoots
+    if (leaders.has(e) && Math.random() < 0.004) {
+      enemyShoot(e);
+    }
+  });
+  // Enemy lasers movement
+  enemyLasers.forEach(l => (l.y += l.speed));
+  enemyLasers = enemyLasers.filter(l => l.y < canvas.height);
+
+
+  // Player laser → enemy collision
+  lasers.forEach((l, li) => {
+    enemies.forEach((e, ei) => {
+      if (
+        l.x < e.x + e.width &&
+        l.x + l.width > e.x &&
+        l.y < e.y + e.height &&
+        l.y + l.height > e.y
+      ) {
+        lasers.splice(li, 1);
+        enemies.splice(ei, 1);
+        score++;
+        updateHUD();
+      }
+    });
+  });
+  // Enemy laser → player collision (lose 1 life)
+  for (let i = enemyLasers.length - 1; i >= 0; i--) {
+    const l = enemyLasers[i];
+    if (
+      l.x < player.x + player.width &&
+      l.x + l.width > player.x &&
+      l.y < player.y + player.height &&
+      l.y + l.height > player.y
+    ) {
+      enemyLasers.splice(i, 1);
+      loseLife();
+      break;
+    }
+  }
 }
+
+
+  
+  // (everything else that was already in update() stays below this)
 
 const leaders = getTrainLeaders();
 
@@ -248,7 +363,8 @@ enemies.forEach(e => {
         lasers.splice(li, 1);
         enemies.splice(ei, 1);
         score++;
-        document.getElementById("score").innerText = "Score: " + score;
+        updateHUD();
+
       }
     });
   });
@@ -314,7 +430,9 @@ function loop() {
   requestAnimationFrame(loop);
 }
 
+updateHUD();
 loop();
+
 </script>
 
 </body>
