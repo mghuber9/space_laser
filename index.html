@@ -47,6 +47,11 @@ let enemyLasers = [];
 let enemyTimer = 0;
 let keys = {};
 let gameOver = false;
+// Extended bounds (how far off-screen enemies can fly)
+const EXT = 150;           // pixels beyond the visible canvas
+const TRAIN_SPACING = 55;  // distance between enemies in a train
+let trainIdCounter = 0;
+  
 
 // Shooting cooldown
 let lastShotTime = 0;
@@ -100,18 +105,37 @@ function shootLaser() {
 // --------------------
 // Enemies
 // --------------------
-function spawnEnemy() {
+function spawnEnemyTrain() {
+  const trainSize = 3 + Math.floor(Math.random() * 4); // 3–6
   const fromLeft = Math.random() < 0.5;
+  const dir = fromLeft ? 1 : -1;
 
-  enemies.push({
-    x: fromLeft ? -40 : canvas.width + 40,
-    y: 50 + Math.random() * 200,
-    width: 40,
-    height: 30,
-    speed: 2 + Math.random() * 2,
-    direction: fromLeft ? 1 : -1
-  });
+  // Diagonal velocity
+  const vx = dir * (1.5 + Math.random() * 2.0);
+  const vy = (Math.random() < 0.5 ? -1 : 1) * (0.8 + Math.random() * 1.6);
+
+  // Start the whole train off-screen in the extended zone
+  const baseX = fromLeft
+    ? (-EXT - trainSize * TRAIN_SPACING)
+    : (canvas.width + EXT + trainSize * TRAIN_SPACING);
+
+  const baseY = 50 + Math.random() * 200;
+
+  const trainId = trainIdCounter++;
+
+  for (let i = 0; i < trainSize; i++) {
+    enemies.push({
+      trainId,
+      x: baseX - vx * (i * (TRAIN_SPACING / Math.max(0.001, Math.abs(vx)))), // spacing roughly along motion
+      y: baseY - vy * (i * (TRAIN_SPACING / Math.max(0.001, Math.abs(vy) || 1))),
+      width: 40,
+      height: 30,
+      vx,
+      vy
+    });
+  }
 }
+
 
 // Enemy laser
 function enemyShoot(enemy) {
@@ -141,27 +165,41 @@ function update() {
 
   // Spawn enemies
   enemyTimer++;
-  if (enemyTimer > 60) {
-    spawnEnemy();
-    enemyTimer = 0;
+  if (enemyTimer > 90) { // slower spawns since trains contain multiple enemies
+  spawnEnemyTrain();
+  enemyTimer = 0;
+}
+
+
+// Enemy movement (diagonal) + extended-bounds behavior
+enemies.forEach(e => {
+  e.x += e.vx;
+  e.y += e.vy;
+
+  // Vertical bounce inside extended bounds
+  if (e.y < -EXT) {
+    e.y = -EXT;
+    e.vy *= -1;
+  }
+  if (e.y + e.height > canvas.height + EXT) {
+    e.y = canvas.height + EXT - e.height;
+    e.vy *= -1;
   }
 
-  // Enemy movement & shooting
-  enemies.forEach(e => {
-    e.x += e.speed * e.direction;
+  // Horizontal wrap across extended bounds (keeps same direction)
+  if (e.vx > 0 && e.x > canvas.width + EXT) {
+    e.x = -EXT - e.width;
+  }
+  if (e.vx < 0 && e.x + e.width < -EXT) {
+    e.x = canvas.width + EXT;
+  }
 
-    if (e.direction === 1 && e.x + e.width >= canvas.width) {
-      e.direction = -1;
-    }
-    if (e.direction === -1 && e.x <= 0) {
-      e.direction = 1;
-    }
+  // Reduced firing rate (you can later change to "only the lead of each train")
+  if (Math.random() < 0.004) {
+    enemyShoot(e);
+  }
+});
 
-    // Reduced firing rate
-    if (Math.random() < 0.005) {
-      enemyShoot(e);
-    }
-  });
 
   // Enemy lasers
   enemyLasers.forEach(l => l.y += l.speed);
