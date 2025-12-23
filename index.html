@@ -30,7 +30,7 @@
 </head>
 <body>
 
-<div id="score">Score: 0</div>
+<div id="score">Score: 0 | Lives: 3</div>
 <canvas id="gameCanvas" width="800" height="600"></canvas>
 
 <script>
@@ -49,8 +49,13 @@ let keys = {};
 let gameOver = false;
 // Extended bounds (how far off-screen enemies can fly)
 const EXT = 150;           // pixels beyond the visible canvas
-const TRAIN_SPACING = 55;  // distance between enemies in a train
+const TRAIN_SPACING = 32;  // distance between enemies in a train
 let trainIdCounter = 0;
+let lives = 3;
+let paused = false;
+let respawnTimer = 0;
+const RESPAWN_DELAY = 90; // frames (~1.5 sec at 60fps)
+  
   
 
 // Shooting cooldown
@@ -124,18 +129,40 @@ function spawnEnemyTrain() {
   const trainId = trainIdCounter++;
 
   for (let i = 0; i < trainSize; i++) {
-    enemies.push({
-      trainId,
-      x: baseX - vx * (i * (TRAIN_SPACING / Math.max(0.001, Math.abs(vx)))), // spacing roughly along motion
-      y: baseY - vy * (i * (TRAIN_SPACING / Math.max(0.001, Math.abs(vy) || 1))),
-      width: 40,
-      height: 30,
-      vx,
-      vy
-    });
-  }
+  enemies.push({
+    trainId,
+    x: baseX - dir * i * TRAIN_SPACING, // keep them lined up as a train
+    y: baseY,
+    width: 40,
+    height: 30,
+    vx,
+    vy
+  });
 }
 
+}
+
+function getTrainLeaders() {
+  // returns a Set of enemy objects that are leaders (front car) per train
+  const leaders = new Map(); // trainId -> enemy
+
+  enemies.forEach(e => {
+    const current = leaders.get(e.trainId);
+    if (!current) {
+      leaders.set(e.trainId, e);
+      return;
+    }
+
+    // Front = farthest in direction of travel
+    if (e.vx > 0) {
+      if (e.x > current.x) leaders.set(e.trainId, e);
+    } else {
+      if (e.x < current.x) leaders.set(e.trainId, e);
+    }
+  });
+
+  return new Set(leaders.values());
+}
 
 // Enemy laser
 function enemyShoot(enemy) {
@@ -170,6 +197,10 @@ function update() {
   enemyTimer = 0;
 }
 
+const leaders = getTrainLeaders();
+
+
+  
 
 // Enemy movement (diagonal) + extended-bounds behavior
 enemies.forEach(e => {
