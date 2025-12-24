@@ -253,7 +253,65 @@ function update() {
       e.y = -EXT;
       e.vy *= -1;
     }
-    
+    // Bottom bounce in extended area
+    if (e.y + e.height > canvas.height + EXT) {
+      e.y = canvas.height + EXT - e.height;
+      e.vy *= -1;
+    }
+
+    // Horizontal wrap
+    if (e.vx > 0 && e.x > canvas.width + EXT) {
+      e.x = -EXT - e.width;
+    }
+    if (e.vx < 0 && e.x + e.width < -EXT) {
+      e.x = canvas.width + EXT;
+    }
+
+    // ONLY leader shoots
+    if (leaders.has(e) && Math.random() < 0.004) {
+      enemyShoot(e);
+    }
+  }); // <-- closes enemies.forEach
+
+  // Enemy lasers movement
+  enemyLasers.forEach(l => (l.y += l.speed));
+  enemyLasers = enemyLasers.filter(l => l.y < canvas.height);
+
+  // Player laser → enemy collision
+  lasers.forEach((l, li) => {
+    enemies.forEach((e, ei) => {
+      if (
+        l.x < e.x + e.width &&
+        l.x + l.width > e.x &&
+        l.y < e.y + e.height &&
+        l.y + l.height > e.y
+      ) {
+        lasers.splice(li, 1);
+        enemies.splice(ei, 1);
+        score++;
+        updateHUD();
+      }
+    });
+  });
+
+  // Enemy laser → player collision (lose 1 life)
+  for (let i = enemyLasers.length - 1; i >= 0; i--) {
+    const l = enemyLasers[i];
+    if (
+      l.x < player.x + player.width &&
+      l.x + l.width > player.x &&
+      l.y < player.y + player.height &&
+      l.y + l.height > player.y
+    ) {
+      enemyLasers.splice(i, 1);
+      loseLife();
+      break;
+    }
+  }
+} // <-- closes function update()
+
+
+  
 // --------------------
 // Draw
 // --------------------
