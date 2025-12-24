@@ -310,23 +310,7 @@ function update() {
 
 
   
-  // (everything else that was already in update() stays below this)
-
-const leaders = getTrainLeaders();
-
-
-  
-
-// Enemy movement (diagonal) + extended-bounds behavior
-enemies.forEach(e => {
-  e.x += e.vx;
-  e.y += e.vy;
-
-  // Vertical bounce inside extended bounds
-  if (e.y < -EXT) {
-    e.y = -EXT;
-    e.vy *= -1;
-  }
+ 
   if (e.y + e.height > canvas.height + EXT) {
     e.y = canvas.height + EXT - e.height;
     e.vy *= -1;
